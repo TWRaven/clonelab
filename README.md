@@ -1,13 +1,13 @@
-# greplab
-Full code search in all your gitlab repositories
+# clonelab
+Clone all your gitlab repositories
 
 ## Installation
 
 ```zsh
-go install github.com/TWRaven/greplab@latest
+go install github.com/TWRaven/clonelab@latest
 ```
 
-Create a config.json file in $HOME/.greplab/ or /etc/greplab/
+Create a config.json file in $HOME/.clonelab/ or /etc/clonelab/
 
 ```json5
 {
@@ -26,15 +26,15 @@ The priority is as follows:
 
 | Cli flag       | Environment variable   | Config key (`json`) | Description                                                                       |
 |:---------------|:-----------------------|:--------------------|:----------------------------------------------------------------------------------|
-| `gitlab-token` | `GREPLAB_GITLAB_TOKEN` | `gitlabToken`       | Your Personal Access Token.                                                       |
-| `gitlab-url`   | `GREPLAB_GITLAB_URL`   | `gitlabUrl`         | Base URL for self-hosted GitLab instances. (default: `https://gitlab.com/api/v4`) |
+| `gitlab-token` | `CLONELAB_GITLAB_TOKEN` | `gitlabToken`       | Your Personal Access Token.                                                       |
+| `gitlab-url`   | `CLONELAB_GITLAB_URL`   | `gitlabUrl`         | Base URL for self-hosted GitLab instances. (default: `https://gitlab.com/api/v4`) |
 
 ### Example
 ```zsh
-GREPLAB_GITLAB_TOKEN="my-token" greplab search "func main"
+CLONELAB_GITLAB_TOKEN="my-token" clonelab clone
 ```
 
 ## Usage
 ```zsh
-greplab search <regex query> [flags]
+clonelab clone [flags]
 ```

@@ -7,16 +7,16 @@ import (
 )
 
 type Clear struct {
-	Full bool `name:"full" short:"f" help:"Remove all cache files including cloned projects."`
+	Full bool `name:"full" short:"f" help:"Remove all files including cloned projects."`
 }
 
 func (c *Clear) Run(options *SharedOptions) error {
 	if c.Full {
-		slog.Info("removing cache directory", "directory", options.GreplabDir)
+		slog.Info("removing clone directory", "directory", options.ProjectDir)
 
-		cmd := exec.Command("rm", "-rf", options.GreplabDir)
+		cmd := exec.Command("rm", "-rf", options.ProjectDir)
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("could not remove cache directory: %w", err)
+			return fmt.Errorf("could not remove clone directory: %w", err)
 		}
 
 		return nil

@@ -1,4 +1,4 @@
-module github.com/TWRaven/greplab
+module github.com/TWRaven/clonelab
 
 go 1.25
 
