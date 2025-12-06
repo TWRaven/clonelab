@@ -4,11 +4,11 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/TWRaven/greplab/internal"
+	"github.com/TWRaven/clonelab/internal"
 	gitlab "gitlab.com/gitlab-org/api/client-go"
 )
 
-type Search struct {
+type Clone struct {
 	Language string `help:"Programming language to filter projects on" short:"l"`
 
 	GitlabToken string `help:"Gitlab access token" short:"t"`
@@ -16,11 +16,9 @@ type Search struct {
 	NumWorkers  int    `help:"Number of workers" default:"5" short:"w"`
 
 	ExcludeProjects []string `help:"Exclude projects" short:"x"`
-
-	Query string `arg:"" name:"query" help:"Regex search query"`
 }
 
-func (s *Search) Run(options *SharedOptions) error {
+func (s *Clone) Run(options *SharedOptions) error {
 	gitlabClient, err := gitlab.NewClient(s.GitlabToken, gitlab.WithBaseURL(s.GitlabURL))
 	if err != nil {
 		slog.Error("Failed to create GitLab client with error: ", err)
@@ -35,17 +33,16 @@ func (s *Search) Run(options *SharedOptions) error {
 		os.Exit(1)
 	}
 
-	grepper := internal.NewGrepper(s.GitlabToken, options.ProjectsCacheDir(), s.NumWorkers)
-	output := grepper.Grep(projects, s.Query)
+	cloner := internal.NewCloner(s.GitlabToken, options.ProjectsDir(), s.NumWorkers)
+	output := cloner.Clone(projects)
 
 	for _, project := range output {
 		if project.Err != nil {
-			slog.Error("Failed to grep project ", project.Project.Name, " with error: ", project.Err)
-			continue
+			slog.Error("Failed to clone project", "project", project.Project.Name, "error", project.Err)
 		}
-
-		project.PrettyPrint()
 	}
+
+	slog.Info("Finished cloning projects", "directory", options.ProjectsDir())
 
 	return nil
 }

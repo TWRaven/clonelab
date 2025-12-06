@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,43 +15,42 @@ import (
 
 type ProjectOutput struct {
 	Project  *Project
-	Output   string
 	Err      error
 	Duration time.Duration
 }
 
-func (project *ProjectOutput) PrettyPrint() {
-	lines := strings.Split(project.Output, "\n")
+//func (project *ProjectOutput) PrettyPrint() {
+//	lines := strings.Split(project.Output, "\n")
+//
+//	isNextLineFilename := true
+//
+//	for _, line := range lines {
+//		// 1. If the line is empty, it means the next line will be a new file
+//		if line == "" {
+//			isNextLineFilename = true
+//			fmt.Println(line) // Print the empty line to keep spacing
+//			continue
+//		}
+//
+//		// 2. If this is a filename, prefix it and reset the flag
+//		if isNextLineFilename {
+//			fmt.Printf("[%s] %s\n", project.Project.Name, line)
+//			isNextLineFilename = false
+//		} else {
+//			// 3. Otherwise, it's a code match line, print normally
+//			fmt.Println(line)
+//		}
+//	}
+//}
 
-	isNextLineFilename := true
-
-	for _, line := range lines {
-		// 1. If the line is empty, it means the next line will be a new file
-		if line == "" {
-			isNextLineFilename = true
-			fmt.Println(line) // Print the empty line to keep spacing
-			continue
-		}
-
-		// 2. If this is a filename, prefix it and reset the flag
-		if isNextLineFilename {
-			fmt.Printf("[%s] %s\n", project.Project.Name, line)
-			isNextLineFilename = false
-		} else {
-			// 3. Otherwise, it's a code match line, print normally
-			fmt.Println(line)
-		}
-	}
-}
-
-type Grepper struct {
+type Cloner struct {
 	token            string
 	projectsFilePath string
 	numWorkers       int
 }
 
-func NewGrepper(gitlabToken string, projectsCacheDir string, numWorkers int) *Grepper {
-	return &Grepper{
+func NewCloner(gitlabToken string, projectsCacheDir string, numWorkers int) *Cloner {
+	return &Cloner{
 		token:            gitlabToken,
 		projectsFilePath: projectsCacheDir,
 		numWorkers:       numWorkers,
@@ -61,10 +59,10 @@ func NewGrepper(gitlabToken string, projectsCacheDir string, numWorkers int) *Gr
 
 type activeTracker struct {
 	sync.Mutex
-	jobs map[string]time.Time // project name to start time
+	jobs map[string]time.Time // project name -> start time
 }
 
-func (g Grepper) Grep(projects []Project, pattern string) []ProjectOutput {
+func (g Cloner) Clone(projects []Project) []ProjectOutput {
 	bar := progressbar.NewOptions(len(projects),
 		progressbar.OptionSetWriter(os.Stdout),
 		progressbar.OptionSetWidth(15),
@@ -91,18 +89,15 @@ func (g Grepper) Grep(projects []Project, pattern string) []ProjectOutput {
 				tracker.Unlock()
 
 				start := time.Now()
-				result := g.grepProject(project, pattern)
+				result := g.cloneProject(project)
 
 				tracker.Lock()
 				delete(tracker.jobs, project.Name)
 				tracker.Unlock()
 
-				if result == nil {
-					result = &ProjectOutput{}
-				}
 				result.Project = &project
 				result.Duration = time.Since(start)
-				outputChan <- *result
+				outputChan <- result
 			}
 		}()
 	}
@@ -134,9 +129,7 @@ loop:
 				break loop
 			}
 			bar.Add(1)
-			if out.Err != nil || out.Output != "" {
-				finalResults = append(finalResults, out)
-			}
+			finalResults = append(finalResults, out)
 
 		case <-ticker.C:
 			tracker.Lock()
@@ -180,7 +173,7 @@ loop:
 	return finalResults
 }
 
-func (g Grepper) clone(projectDir string, repoURL string) *ProjectOutput {
+func (g Cloner) clone(projectDir string, repoURL string) *ProjectOutput {
 	if err := os.MkdirAll(projectDir, 0755); err != nil {
 		return &ProjectOutput{Err: err}
 	}
@@ -194,11 +187,11 @@ func (g Grepper) clone(projectDir string, repoURL string) *ProjectOutput {
 	return nil
 }
 
-func (g Grepper) grepProject(project Project, pattern string) *ProjectOutput {
+func (g Cloner) cloneProject(project Project) ProjectOutput {
 	repoURL := strings.Replace(project.URL, "https://", fmt.Sprintf("https://oauth2:%s@", g.token), 1)
 
 	if err := os.MkdirAll(g.projectsFilePath, 0755); err != nil {
-		return &ProjectOutput{Err: err}
+		return ProjectOutput{Err: err}
 	}
 
 	splitRepoName := strings.Split(project.Name, "/")
@@ -208,7 +201,7 @@ func (g Grepper) grepProject(project Project, pattern string) *ProjectOutput {
 
 	if _, err := os.Stat(projectDir); os.IsNotExist(err) {
 		if errOutput := g.clone(projectDir, repoURL); errOutput != nil {
-			return errOutput
+			return *errOutput
 		}
 	} else {
 		cmd := exec.Command("git", "pull")
@@ -220,31 +213,11 @@ func (g Grepper) grepProject(project Project, pattern string) *ProjectOutput {
 			_ = rmDirCmd.Run()
 
 			if errOutput := g.clone(projectDir, repoURL); errOutput != nil {
-				errOutput.Err = fmt.Errorf("git pull failed with error: %s: %w, tried to clone instead, which failed with error %w", string(output), err, errOutput)
-				return errOutput
+				errOutput.Err = fmt.Errorf("git pull failed with error: %s: %w, tried to clone instead, which failed with error %w", string(output), err, errOutput.Err)
+				return *errOutput
 			}
 		}
 	}
 
-	cmd := exec.Command("rg",
-		"--pretty",
-		"--sort=path",
-		pattern,
-	)
-	cmd.Dir = projectDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		// Check if it's just "exit status 1" (no matches) vs a real error
-		var exitError *exec.ExitError
-		if errors.As(err, &exitError) && exitError.ExitCode() == 1 {
-			// No matches found
-			return nil
-		}
-		return &ProjectOutput{Err: fmt.Errorf("rg pull failed: %s: %w", string(output), err)}
-	}
-
-	return &ProjectOutput{
-		Output: string(output),
-	}
+	return ProjectOutput{Project: &project}
 }

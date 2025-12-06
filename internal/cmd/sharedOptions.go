@@ -3,13 +3,13 @@ package cmd
 import "path/filepath"
 
 type SharedOptions struct {
-	GreplabDir string
+	ProjectDir string
 }
 
 func (s SharedOptions) GitlabCacheFile() string {
-	return filepath.Join(s.GreplabDir, "cache.json")
+	return filepath.Join(s.ProjectDir, "cache.json")
 }
 
-func (s SharedOptions) ProjectsCacheDir() string {
-	return filepath.Join(s.GreplabDir, "projects")
+func (s SharedOptions) ProjectsDir() string {
+	return filepath.Join(s.ProjectDir, "projects")
 }
